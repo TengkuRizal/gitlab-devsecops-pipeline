@@ -6,7 +6,6 @@ variables:
 
 deploy-demo:
   stage: deploy
-  image: bitnami/kubectl:latest
   script:
     - kubectl config use-context "$KUBE_CONTEXT"
     - kubectl get nodes
