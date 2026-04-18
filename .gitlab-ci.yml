@@ -7,7 +7,12 @@ variables:
 deploy-demo:
   stage: deploy
   script:
+    - echo "KUBECONFIG=$KUBECONFIG"
+    - test -n "$KUBECONFIG"
+    - ls -l "$KUBECONFIG"
+    - kubectl config get-contexts
     - kubectl config use-context "$KUBE_CONTEXT"
+    - kubectl cluster-info
     - kubectl get nodes
     - kubectl create namespace demo --dry-run=client -o yaml | kubectl apply -f -
     - kubectl create deployment demo-nginx --image=nginx:stable -n demo --dry-run=client -o yaml | kubectl apply -f -
