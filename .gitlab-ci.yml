@@ -2,17 +2,20 @@ stages:
   - deploy
 
 variables:
-  KUBE_CONTEXT: kujal/demo-nginx:homelab-agent
+  AGENT_ID: "2"
+  KUBE_CONTEXT: "my-agent-context"
+  K8S_PROXY_URL: "http://10.10.1.101/-/kubernetes-agent/k8s-proxy/"
 
 deploy-demo:
   stage: deploy
   script:
-    - echo "KUBECONFIG=$KUBECONFIG"
-    - test -n "$KUBECONFIG"
-    - ls -l "$KUBECONFIG"
-    - kubectl config get-contexts
-    - kubectl config current-context || true
+    - kubectl config set-credentials agent:$AGENT_ID --token="ci:${AGENT_ID}:${CI_JOB_TOKEN}"
+    - kubectl config set-cluster gitlab --server="${K8S_PROXY_URL}"
+    - kubectl config set-context "$KUBE_CONTEXT" --cluster=gitlab --user="agent:${AGENT_ID}"
     - kubectl config use-context "$KUBE_CONTEXT"
-    - kubectl config current-context
-    - kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}{"\n"}{.users[0].name}{"\n"}'
     - kubectl cluster-info
+    - kubectl get nodes
+    - kubectl create namespace demo --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl create deployment demo-nginx --image=nginx:stable -n demo --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl expose deployment demo-nginx --type=NodePort --port=80 --target-port=80 -n demo --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl rollout status deployment/demo-nginx -n demo
