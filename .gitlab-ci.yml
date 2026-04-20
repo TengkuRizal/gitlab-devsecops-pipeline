@@ -20,29 +20,25 @@ deploy-demo:
   - sast
   - image-scan
   - deploy
-
-secret-scan:
+  secret-scan:
   stage: secret-scan
   image: zricethezav/gitleaks:latest
   script:
     - gitleaks detect --source . --verbose
   allow_failure: false
-
-sast:
+  sast:
   stage: sast
   image: returntocorp/semgrep:latest
   script:
     - semgrep scan --config auto .
   allow_failure: false
-
-image-scan:
+  image-scan:
   stage: image-scan
   image: aquasec/trivy:latest
   script:
     - trivy image --exit-code 1 --severity HIGH,CRITICAL nginx:stable
   allow_failure: true
-
-deploy:
+  deploy:
   stage: deploy
   image: bitnami/kubectl:latest
   script:
