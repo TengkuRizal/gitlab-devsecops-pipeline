@@ -1,44 +1,31 @@
 stages:
-  - deploy
-
-deploy-demo:
-  stage: deploy
-  image: bitnami/kubectl:latest
-  script:
-  script:
-  - mkdir -p ~/.kube
-  - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
-  - chmod 600 ~/.kube/config
-  - export KUBECONFIG=~/.kube/config
-  - kubectl get nodes
-  - kubectl create namespace demo --dry-run=client -o yaml | kubectl apply -f -
-  - kubectl create deployment demo-nginx --image=nginx:stable -n demo --dry-run=client -o yaml | kubectl apply -f -
-  - kubectl expose deployment demo-nginx --type=NodePort --port=80 -n demo --dry-run=client -o yaml | kubectl apply -f -
-  - kubectl rollout status deployment/demo-nginx -n demo
-  stages:
   - secret-scan
   - sast
   - image-scan
   - deploy
-  secret-scan:
+
+secret-scan:
   stage: secret-scan
   image: zricethezav/gitleaks:latest
   script:
     - gitleaks detect --source . --verbose
   allow_failure: false
-  sast:
+
+sast:
   stage: sast
   image: returntocorp/semgrep:latest
   script:
     - semgrep scan --config auto .
   allow_failure: false
-  image-scan:
+
+image-scan:
   stage: image-scan
   image: aquasec/trivy:latest
   script:
     - trivy image --exit-code 1 --severity HIGH,CRITICAL nginx:stable
   allow_failure: true
-  deploy:
+
+deploy:
   stage: deploy
   image: bitnami/kubectl:latest
   script:
