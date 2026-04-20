@@ -5,10 +5,8 @@ deploy-demo:
   stage: deploy
   image: bitnami/kubectl:latest
   script:
-    - mkdir -p ~/.kube
-    - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
-    - kubectl get nodes
-    - kubectl create namespace demo --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl create deployment demo-nginx --image=nginx:stable -n demo --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl expose deployment demo-nginx --type=NodePort --port=80 -n demo --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl rollout status deployment/demo-nginx -n demo
+  - mkdir -p ~/.kube
+  - echo "$KUBECONFIG_B64" | wc -c          # Semak variable ada content
+  - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+  - cat ~/.kube/config | head -5             # Semak output betul
+  - kubectl get nodes
