@@ -22,8 +22,8 @@ image-scan:
   stage: image-scan
   image: aquasec/trivy:latest
   script:
-    - trivy image --exit-code 1 --severity HIGH,CRITICAL nginx:stable
-  allow_failure: true
+    - trivy image --exit-code 1 --severity CRITICAL nginx:stable
+  allow_failure: false
 
 deploy:
   stage: deploy
