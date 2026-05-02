@@ -29,6 +29,22 @@ spec:
               memory: "128Mi"
           securityContext:
             allowPrivilegeEscalation: false
+spec:
+  template:
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nginx
+          image: nginx:1.26.2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+
             capabilities:
               drop:
                 - ALL
