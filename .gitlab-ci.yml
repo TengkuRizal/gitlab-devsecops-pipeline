@@ -10,6 +10,7 @@ stages:
 variables:
   NAMESPACE: "demo"
   APP_NAME: "demo-nginx"
+  variables:
   IMAGE_NAME: "nginxinc/nginx-unprivileged:1.27-alpine"
 
 validate-k8s:
@@ -75,6 +76,7 @@ image-scan:
       - trivy-image-report.json
     expire_in: 7 days
   allow_failure: false
+
 
 deploy:
   stage: deploy
