@@ -10,7 +10,7 @@ stages:
 variables:
   NAMESPACE: "demo"
   APP_NAME: "demo-nginx"
-  IMAGE_NAME: nginx:1.28.0-alpine
+  IMAGE_NAME: "nginxinc/nginx-unprivileged:1.27-alpine"
 
 validate-k8s:
   stage: validate
