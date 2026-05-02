@@ -11,7 +11,8 @@ variables:
   NAMESPACE: "demo"
   APP_NAME: "demo-nginx"
   variables:
-  IMAGE_NAME: "nginxinc/nginx-unprivileged:1.27-alpine"
+  variables:
+  IMAGE_NAME: "$CI_REGISTRY_IMAGE/demo-nginx:$CI_COMMIT_SHORT_SHA"
 
 validate-k8s:
   stage: validate
