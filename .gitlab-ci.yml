@@ -1,39 +1,105 @@
 stages:
+  - validate
   - secret-scan
   - sast
+  - config-scan
   - image-scan
   - deploy
+  - verify
+
+variables:
+  NAMESPACE: "demo"
+  APP_NAME: "demo-nginx"
+  IMAGE_NAME: "nginx:1.26.2"
+
+validate-k8s:
+  stage: validate
+  image: bitnami/kubectl:1.30
+  script:
+    - kubectl apply --dry-run=client -f k8s/
 
 secret-scan:
   stage: secret-scan
-  image: zricethezav/gitleaks:latest
+  image:
+    name: zricethezav/gitleaks:v8.18.4
+    entrypoint: [""]
   script:
-    - gitleaks detect --source . --verbose
+    - gitleaks detect --source . --verbose --redact --report-format json --report-path gitleaks-report.json
+  artifacts:
+    when: always
+    paths:
+      - gitleaks-report.json
+    expire_in: 7 days
   allow_failure: false
 
 sast:
   stage: sast
-  image: returntocorp/semgrep:latest
+  image: returntocorp/semgrep:1.75.0
   script:
-    - semgrep scan --config auto .
+    - semgrep scan --config auto --json --output semgrep-report.json .
+  artifacts:
+    when: always
+    paths:
+      - semgrep-report.json
+    expire_in: 7 days
+  allow_failure: false
+
+config-scan:
+  stage: config-scan
+  image:
+    name: aquasec/trivy:0.52.2
+    entrypoint: [""]
+  script:
+    - trivy config --exit-code 1 --severity HIGH,CRITICAL --format json --output trivy-config-report.json k8s/
+  artifacts:
+    when: always
+    paths:
+      - trivy-config-report.json
+    expire_in: 7 days
   allow_failure: false
 
 image-scan:
   stage: image-scan
-  image: aquasec/trivy:latest
+  image:
+    name: aquasec/trivy:0.52.2
+    entrypoint: [""]
   script:
-    - trivy image --exit-code 1 --severity CRITICAL nginx:stable
+    - trivy image --exit-code 1 --severity CRITICAL --format json --output trivy-image-report.json "$IMAGE_NAME"
+  artifacts:
+    when: always
+    paths:
+      - trivy-image-report.json
+    expire_in: 7 days
   allow_failure: false
 
 deploy:
   stage: deploy
-  image: bitnami/kubectl:latest
+  image:
+    name: bitnami/kubectl:1.30
+    entrypoint: [""]
   script:
     - mkdir -p ~/.kube
     - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
     - chmod 600 ~/.kube/config
     - export KUBECONFIG=~/.kube/config
-    - kubectl create namespace demo --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl create deployment demo-nginx --image=nginx:stable -n demo --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl expose deployment demo-nginx --type=NodePort --port=80 -n demo --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl rollout status deployment/demo-nginx -n demo
+    - kubectl apply -f k8s/
+    - kubectl rollout status deployment/$APP_NAME -n $NAMESPACE
+  only:
+    - main
+
+verify:
+  stage: verify
+  image:
+    name: bitnami/kubectl:1.30
+    entrypoint: [""]
+  script:
+    - mkdir -p ~/.kube
+    - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+    - chmod 600 ~/.kube/config
+    - export KUBECONFIG=~/.kube/config
+    - kubectl get namespace $NAMESPACE
+    - kubectl get deployment $APP_NAME -n $NAMESPACE
+    - kubectl get pods -n $NAMESPACE -o wide
+    - kubectl get svc -n $NAMESPACE
+  only:
+    - main
