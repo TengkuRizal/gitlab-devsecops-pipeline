@@ -20,7 +20,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: nginx
-          image: nginxinc/nginx-unprivileged:1.27-alpine
+          image: registry.example.local/rizal/demo-nginx:<tag>
           ports:
             - containerPort: 8080
           resources:
