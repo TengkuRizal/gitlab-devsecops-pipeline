@@ -3,6 +3,7 @@ stages:
   - secret-scan
   - sast
   - config-scan
+  - build-image
   - image-scan
   - deploy
   - verify
@@ -10,64 +11,21 @@ stages:
 variables:
   NAMESPACE: "demo"
   APP_NAME: "demo-nginx"
-  variables:
-  variables:
-  IMAGE_NAME: "$CI_REGISTRY_IMAGE/demo-nginx:$CI_COMMIT_SHORT_SHA"
+  IMAGE_NAME: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
 
-validate-k8s:
-  stage: validate
+build-image:
+  stage: build-image
   script:
-    - test -n "$KUBECONFIG_B64" || (echo "KUBECONFIG_B64 is not available" && exit 1)
-    - mkdir -p ~/.kube
-    - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
-    - chmod 600 ~/.kube/config
-    - export KUBECONFIG=~/.kube/config
-    - kubectl config current-context
-    - kubectl apply --dry-run=client -f k8s/
-
-secret-scan:
-  stage: secret-scan
-  image:
-    name: zricethezav/gitleaks:v8.18.4
-    entrypoint: [""]
-  script:
-    - gitleaks detect --source . --verbose --redact --report-format json --report-path gitleaks-report.json
-  artifacts:
-    when: always
-    paths:
-      - gitleaks-report.json
-    expire_in: 7 days
-  allow_failure: false
-
-sast:
-  stage: sast
-  image: returntocorp/semgrep:1.75.0
-  script:
-    - semgrep scan --config auto --json --output semgrep-report.json .
-  artifacts:
-    when: always
-    paths:
-      - semgrep-report.json
-    expire_in: 7 days
-  allow_failure: false
-
-config-scan:
-  stage: config-scan
-  image:
-    name: aquasec/trivy:0.52.2
-    entrypoint: [""]
-  script:
-    - trivy config --exit-code 1 --severity HIGH,CRITICAL --format json --output trivy-config-report.json k8s/
-  artifacts:
-    when: always
-    paths:
-      - trivy-config-report.json
-    expire_in: 7 days
-  allow_failure: false
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - docker build -t "$IMAGE_NAME" .
+    - docker push "$IMAGE_NAME"
+  only:
+    - main
 
 image-scan:
   stage: image-scan
   script:
+    - echo "Scanning image $IMAGE_NAME"
     - trivy image --scanners vuln --pkg-types os --skip-java-db-update --skip-version-check --severity CRITICAL --format table "$IMAGE_NAME"
     - trivy image --scanners vuln --pkg-types os --skip-java-db-update --skip-version-check --exit-code 1 --severity CRITICAL --format json --output 
       trivy-image-report.json "$IMAGE_NAME"
@@ -77,6 +35,8 @@ image-scan:
       - trivy-image-report.json
     expire_in: 7 days
   allow_failure: false
+  only:
+    - main
 
 
 deploy:
