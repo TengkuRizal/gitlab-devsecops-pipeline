@@ -32,18 +32,19 @@ spec:
 spec:
   template:
     spec:
-      securityContext:
-        seccompProfile:
-          type: RuntimeDefault
+    securityContext:
+       seccompProfile:
+       type: RuntimeDefault
       containers:
-        - name: nginx
-          image: nginx:1.26.2
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
-            capabilities:
-              drop:
-                - ALL
+       - name: nginx
+    securityContext:
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+
 
             capabilities:
               drop:
