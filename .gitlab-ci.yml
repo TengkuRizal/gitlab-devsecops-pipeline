@@ -67,7 +67,7 @@ image-scan:
   stage: image-scan
   script:
     - trivy image --scanners vuln --pkg-types os --skip-java-db-update --skip-version-check --severity CRITICAL --format table "$IMAGE_NAME"
-    - trivy image --scanners vuln --pkg-types os --skip-java-db-update --skip-version-check --exit-code 1 --severity CRITICAL --format json --output   
+    - trivy image --scanners vuln --pkg-types os --skip-java-db-update --skip-version-check --exit-code 1 --severity CRITICAL --format json --output 
       trivy-image-report.json "$IMAGE_NAME"
   artifacts:
     when: always
