@@ -14,9 +14,15 @@ variables:
 
 validate-k8s:
   stage: validate
-  image: bitnami/kubectl:1.30
   script:
+    - test -n "$KUBECONFIG_B64" || (echo "KUBECONFIG_B64 is not available" && exit 1)
+    - mkdir -p ~/.kube
+    - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+    - chmod 600 ~/.kube/config
+    - export KUBECONFIG=~/.kube/config
+    - kubectl config current-context
     - kubectl apply --dry-run=client -f k8s/
+
 
 secret-scan:
   stage: secret-scan
