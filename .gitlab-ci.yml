@@ -23,7 +23,6 @@ validate-k8s:
     - kubectl config current-context
     - kubectl apply --dry-run=client -f k8s/
 
-
 secret-scan:
   stage: secret-scan
   image:
@@ -67,7 +66,8 @@ config-scan:
 image-scan:
   stage: image-scan
   script:
-    - trivy image --scanners vuln --pkg-types os --skip-java-db-update --skip-version-check --exit-code 1 --severity CRITICAL --format json --output    
+    - trivy image --scanners vuln --pkg-types os --skip-java-db-update --skip-version-check --severity CRITICAL --format table "$IMAGE_NAME"
+    - trivy image --scanners vuln --pkg-types os --skip-java-db-update --skip-version-check --exit-code 1 --severity CRITICAL --format json --output   
       trivy-image-report.json "$IMAGE_NAME"
   artifacts:
     when: always
@@ -75,7 +75,6 @@ image-scan:
       - trivy-image-report.json
     expire_in: 7 days
   allow_failure: false
-
 
 deploy:
   stage: deploy
