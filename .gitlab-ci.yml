@@ -4,10 +4,11 @@ stages:
   - sast
   - config-scan
   - build-image
+  - sbom
   - image-scan
   - deploy
   - verify
-
+  
 variables:
   NAMESPACE: "demo"
   APP_NAME: "demo-nginx"
