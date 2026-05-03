@@ -42,6 +42,17 @@ image-scan:
   only:
     - main
 
+generate-sbom:
+  stage: sbom
+  script:
+    - syft "$IMAGE_NAME" -o cyclonedx-json=sbom-cyclonedx.json
+  artifacts:
+    when: always
+    paths:
+      - sbom-cyclonedx.json
+    expire_in: 7 days
+  only:
+    - main
 
 deploy:
   stage: deploy
