@@ -27,24 +27,17 @@ build-image:
     - main
 
 trivy_image_scan:
+   stage: scan
+   script:
+     - docker load -i image.tar
+     - trivy image --skip-version-check --skip-java-db-update --severity HIGH,CRITICAL --format json --output trivy-image-report.json   
+      vulnerable-app:$CI_COMMIT_SHORT_SHA
 
-  stage: scan
-
-  script:
-
-    - docker load -i image.tar
-
-    - trivy image --skip-version-check --skip-java-db-update --severity HIGH,CRITICAL --format json --output trivy-image-report.json vulnerable-app:$CI_COMMIT_SHORT_SHA
-
-  artifacts:
-
-    when: always
-
-    paths:
-
-      - trivy-image-report.json
-
-    expire_in: 1 week
+artifacts:
+   when: always
+   paths:
+   - trivy-image-report.json
+   expire_in: 1 week
 
 image-scan:
   stage: image-scan
