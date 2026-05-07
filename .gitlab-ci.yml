@@ -39,18 +39,17 @@ artifacts:
    - trivy-image-report.json
    expire_in: 1 week
 
-image-scan:
-  stage: image-scan
+trivy_image_scan:
+  stage: scan
   script:
-    - echo "Scanning image $IMAGE_NAME"
-    - trivy image --scanners vuln --pkg-types os --skip-java-db-update --skip-version-check --severity CRITICAL --format table "$IMAGE_NAME"
-    - trivy image --scanners vuln --pkg-types os --skip-java-db-update --skip-version-check --exit-code 1 --severity CRITICAL --format json --output 
-      trivy-image-report.json "$IMAGE_NAME"
+    - docker load -i image.tar
+    - trivy image --skip-version-check --skip-java-db-update --severity HIGH,CRITICAL --format json --output trivy-image-report.json   
+      vulnerable-app:$CI_COMMIT_SHORT_SHA
   artifacts:
     when: always
     paths:
       - trivy-image-report.json
-    expire_in: 7 days
+    expire_in: 1 week
   allow_failure: false
   only:
     - main
