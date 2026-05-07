@@ -8,7 +8,7 @@ stages:
   - image-scan
   - deploy
   - verify
-  
+
 variables:
   NAMESPACE: "demo"
   APP_NAME: "demo-nginx"
@@ -26,43 +26,30 @@ build-image:
   only:
     - main
 
-trivy_image_scan:
-   stage: scan
-   script:
-     - docker load -i image.tar
-     - trivy image --skip-version-check --skip-java-db-update --severity HIGH,CRITICAL --format json --output trivy-image-report.json   
-      vulnerable-app:$CI_COMMIT_SHORT_SHA
-
-artifacts:
-   when: always
-   paths:
-   - trivy-image-report.json
-   expire_in: 1 week
-
-trivy_image_scan:
-  stage: scan
-  script:
-    - docker load -i image.tar
-    - trivy image --skip-version-check --skip-java-db-update --severity HIGH,CRITICAL --format json --output trivy-image-report.json   
-      vulnerable-app:$CI_COMMIT_SHORT_SHA
-  artifacts:
-    when: always
-    paths:
-      - trivy-image-report.json
-    expire_in: 1 week
-  allow_failure: false
-  only:
-    - main
-
 generate-sbom:
   stage: sbom
   script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
     - syft "$IMAGE_NAME" -o cyclonedx-json=sbom-cyclonedx.json
   artifacts:
     when: always
     paths:
       - sbom-cyclonedx.json
     expire_in: 7 days
+  only:
+    - main
+
+trivy_image_scan:
+  stage: image-scan
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+    - trivy image --skip-version-check --skip-java-db-update --severity HIGH,CRITICAL --format json --output trivy-image-report.json "$IMAGE_NAME"
+  artifacts:
+    when: always
+    paths:
+      - trivy-image-report.json
+    expire_in: 1 week
+  allow_failure: false
   only:
     - main
 
