@@ -19,7 +19,11 @@ validate-manifests:
   stage: validate
   script:
     - echo "=== Validating Kubernetes manifests ==="
-    - kubectl apply --dry-run=client --validate=false -f k8s/ 2>&1 | tee validate-report.txt
+    - mkdir -p ~/.kube
+    - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+    - chmod 600 ~/.kube/config
+    - export KUBECONFIG=~/.kube/config
+    - kubectl apply --dry-run=client -f k8s/ 2>&1 | tee validate-report.txt
     - echo "Manifest validation complete"
   artifacts:
     when: always
@@ -28,7 +32,6 @@ validate-manifests:
     expire_in: 7 days
   only:
     - main
-
 # ─── Stage 2: Secret Scan ─────────────────────────────────────
 gitleaks-scan:
   stage: secret-scan
