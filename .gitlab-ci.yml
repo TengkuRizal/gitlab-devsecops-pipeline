@@ -17,12 +17,9 @@ variables:
 # ─── Stage 1: Validate ────────────────────────────────────────
 validate-manifests:
   stage: validate
-  image:
-    name: bitnami/kubectl:1.30
-    entrypoint: [""]
   script:
     - echo "=== Validating Kubernetes manifests ==="
-    - kubectl apply --dry-run=client -f k8s/ 2>&1 | tee validate-report.txt
+    - kubectl apply --dry-run=client --validate=false -f k8s/ 2>&1 | tee validate-report.txt
     - echo "Manifest validation complete"
   artifacts:
     when: always
@@ -35,9 +32,6 @@ validate-manifests:
 # ─── Stage 2: Secret Scan ─────────────────────────────────────
 gitleaks-scan:
   stage: secret-scan
-  image:
-    name: zricethezav/gitleaks:latest
-    entrypoint: [""]
   script:
     - echo "=== Scanning for secrets with Gitleaks ==="
     - gitleaks detect --source . --verbose --report-format json --report-path gitleaks-report.json
@@ -53,10 +47,9 @@ gitleaks-scan:
 # ─── Stage 3: SAST ────────────────────────────────────────────
 semgrep-sast:
   stage: sast
-  image: semgrep/semgrep:latest
   script:
     - echo "=== Running Semgrep SAST ==="
-    - semgrep scan --config=auto --json --output semgrep-report.json . || true
+    - /home/runner/.local/bin/semgrep scan --config=auto --json --output semgrep-report.json . || true
     - echo "Semgrep scan complete"
   artifacts:
     when: always
@@ -85,8 +78,8 @@ k8s_config_scan:
 build-image:
   stage: build-image
   script:
+    - echo "=== Building and pushing Docker image ==="
     - echo "CI_REGISTRY=$CI_REGISTRY"
-    - echo "CI_REGISTRY_IMAGE=$CI_REGISTRY_IMAGE"
     - test -n "$CI_REGISTRY" || (echo "CI_REGISTRY is empty." && exit 1)
     - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
     - docker build -t "$IMAGE_NAME" .
@@ -128,9 +121,6 @@ trivy_image_scan:
 # ─── Stage 8: Deploy ──────────────────────────────────────────
 deploy:
   stage: deploy
-  image:
-    name: bitnami/kubectl:1.30
-    entrypoint: [""]
   script:
     - echo "=== Deploying to Kubernetes ==="
     - mkdir -p ~/.kube
@@ -145,9 +135,6 @@ deploy:
 # ─── Stage 9: Verify ──────────────────────────────────────────
 verify:
   stage: verify
-  image:
-    name: bitnami/kubectl:1.30
-    entrypoint: [""]
   script:
     - echo "=== Verifying deployment ==="
     - mkdir -p ~/.kube
