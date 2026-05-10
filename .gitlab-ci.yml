@@ -1,1 +1,152 @@
+stages:
+  - validate
+  - secret-scan
+  - sast
+  - config-scan
+  - build-image
+  - sbom
+  - image-scan
+  - deploy
+  - verify
 
+variables:
+  NAMESPACE: "demo"
+  APP_NAME: "demo-nginx"
+  IMAGE_NAME: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+
+# ─── Stage 1: Validate ────────────────────────────────────────
+validate-manifests:
+  stage: validate
+  script:
+    - echo "=== Validating Kubernetes manifests ==="
+    - mkdir -p ~/.kube
+    - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+    - chmod 600 ~/.kube/config
+    - export KUBECONFIG=~/.kube/config
+    - kubectl apply --dry-run=client -f k8s/ 2>&1 | tee validate-report.txt
+    - echo "Manifest validation complete"
+  artifacts:
+    when: always
+    paths:
+      - validate-report.txt
+    expire_in: 7 days
+  only:
+    - main
+# ─── Stage 2: Secret Scan ─────────────────────────────────────
+gitleaks-scan:
+  stage: secret-scan
+  script:
+    - echo "=== Scanning for secrets with Gitleaks ==="
+    - gitleaks detect --source . --verbose --report-format json --report-path gitleaks-report.json
+  artifacts:
+    when: always
+    paths:
+      - gitleaks-report.json
+    expire_in: 7 days
+  allow_failure: false
+  only:
+    - main
+
+# ─── Stage 3: SAST ────────────────────────────────────────────
+semgrep-sast:
+  stage: sast
+  script:
+    - echo "=== Running Semgrep SAST ==="
+    - /home/runner/.local/bin/semgrep scan --config=auto --json --output semgrep-report.json . || true
+    - echo "Semgrep scan complete"
+  artifacts:
+    when: always
+    paths:
+      - semgrep-report.json
+    expire_in: 7 days
+  allow_failure: false
+  only:
+    - main
+
+# ─── Stage 4: Config Scan ─────────────────────────────────────
+k8s_config_scan:
+  stage: config-scan
+  script:
+    - echo "=== Scanning K8s manifests with Trivy ==="
+    - trivy config --skip-version-check --format json --output trivy-k8s-config-report.json k8s/
+  artifacts:
+    when: always
+    paths:
+      - trivy-k8s-config-report.json
+    expire_in: 1 week
+  only:
+    - main
+
+# ─── Stage 5: Build Image ─────────────────────────────────────
+build-image:
+  stage: build-image
+  script:
+    - echo "=== Building and pushing Docker image ==="
+    - echo "CI_REGISTRY=$CI_REGISTRY"
+    - test -n "$CI_REGISTRY" || (echo "CI_REGISTRY is empty." && exit 1)
+    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+    - docker build -t "$IMAGE_NAME" .
+    - docker push "$IMAGE_NAME"
+  only:
+    - main
+
+# ─── Stage 6: SBOM ────────────────────────────────────────────
+generate-sbom:
+  stage: sbom
+  script:
+    - echo "=== Generating SBOM with Syft ==="
+    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+    - syft "$IMAGE_NAME" -o cyclonedx-json=sbom-cyclonedx.json
+  artifacts:
+    when: always
+    paths:
+      - sbom-cyclonedx.json
+    expire_in: 7 days
+  only:
+    - main
+
+# ─── Stage 7: Image Scan ──────────────────────────────────────
+trivy_image_scan:
+  stage: image-scan
+  script:
+    - echo "=== Scanning container image with Trivy ==="
+    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+    - trivy image --skip-version-check --skip-java-db-update --severity HIGH,CRITICAL --format json --output trivy-image-report.json "$IMAGE_NAME"
+  artifacts:
+    when: always
+    paths:
+      - trivy-image-report.json
+    expire_in: 1 week
+  allow_failure: false
+  only:
+    - main
+
+# ─── Stage 8: Deploy ──────────────────────────────────────────
+deploy:
+  stage: deploy
+  script:
+    - echo "=== Deploying to Kubernetes ==="
+    - mkdir -p ~/.kube
+    - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+    - chmod 600 ~/.kube/config
+    - export KUBECONFIG=~/.kube/config
+    - kubectl apply -f k8s/
+    - kubectl rollout status deployment/$APP_NAME -n $NAMESPACE
+  only:
+    - main
+
+# ─── Stage 9: Verify ──────────────────────────────────────────
+verify:
+  stage: verify
+  script:
+    - echo "=== Verifying deployment ==="
+    - mkdir -p ~/.kube
+    - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+    - chmod 600 ~/.kube/config
+    - export KUBECONFIG=~/.kube/config
+    - kubectl get namespace $NAMESPACE
+    - kubectl get deployment $APP_NAME -n $NAMESPACE
+    - kubectl get pods -n $NAMESPACE -o wide
+    - kubectl get svc -n $NAMESPACE
+  only:
+    - main
