@@ -14,21 +14,91 @@ variables:
   APP_NAME: "demo-nginx"
   IMAGE_NAME: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
 
+# ─── Stage 1: Validate ────────────────────────────────────────
+validate-manifests:
+  stage: validate
+  image:
+    name: bitnami/kubectl:1.30
+    entrypoint: [""]
+  script:
+    - echo "=== Validating Kubernetes manifests ==="
+    - kubectl apply --dry-run=client -f k8s/ 2>&1 | tee validate-report.txt
+    - echo "Manifest validation complete"
+  artifacts:
+    when: always
+    paths:
+      - validate-report.txt
+    expire_in: 7 days
+  only:
+    - main
+
+# ─── Stage 2: Secret Scan ─────────────────────────────────────
+gitleaks-scan:
+  stage: secret-scan
+  image:
+    name: zricethezav/gitleaks:latest
+    entrypoint: [""]
+  script:
+    - echo "=== Scanning for secrets with Gitleaks ==="
+    - gitleaks detect --source . --verbose --report-format json --report-path gitleaks-report.json
+  artifacts:
+    when: always
+    paths:
+      - gitleaks-report.json
+    expire_in: 7 days
+  allow_failure: false
+  only:
+    - main
+
+# ─── Stage 3: SAST ────────────────────────────────────────────
+semgrep-sast:
+  stage: sast
+  image: semgrep/semgrep:latest
+  script:
+    - echo "=== Running Semgrep SAST ==="
+    - semgrep scan --config=auto --json --output semgrep-report.json . || true
+    - echo "Semgrep scan complete"
+  artifacts:
+    when: always
+    paths:
+      - semgrep-report.json
+    expire_in: 7 days
+  allow_failure: false
+  only:
+    - main
+
+# ─── Stage 4: Config Scan ─────────────────────────────────────
+k8s_config_scan:
+  stage: config-scan
+  script:
+    - echo "=== Scanning K8s manifests with Trivy ==="
+    - trivy config --skip-version-check --format json --output trivy-k8s-config-report.json k8s/
+  artifacts:
+    when: always
+    paths:
+      - trivy-k8s-config-report.json
+    expire_in: 1 week
+  only:
+    - main
+
+# ─── Stage 5: Build Image ─────────────────────────────────────
 build-image:
   stage: build-image
   script:
     - echo "CI_REGISTRY=$CI_REGISTRY"
     - echo "CI_REGISTRY_IMAGE=$CI_REGISTRY_IMAGE"
-    - test -n "$CI_REGISTRY" || (echo "CI_REGISTRY is empty. GitLab Container Registry may not be enabled." && exit 1)
+    - test -n "$CI_REGISTRY" || (echo "CI_REGISTRY is empty." && exit 1)
     - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
     - docker build -t "$IMAGE_NAME" .
     - docker push "$IMAGE_NAME"
   only:
     - main
 
+# ─── Stage 6: SBOM ────────────────────────────────────────────
 generate-sbom:
   stage: sbom
   script:
+    - echo "=== Generating SBOM with Syft ==="
     - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
     - syft "$IMAGE_NAME" -o cyclonedx-json=sbom-cyclonedx.json
   artifacts:
@@ -39,9 +109,11 @@ generate-sbom:
   only:
     - main
 
+# ─── Stage 7: Image Scan ──────────────────────────────────────
 trivy_image_scan:
   stage: image-scan
   script:
+    - echo "=== Scanning container image with Trivy ==="
     - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
     - trivy image --skip-version-check --skip-java-db-update --severity HIGH,CRITICAL --format json --output trivy-image-report.json "$IMAGE_NAME"
   artifacts:
@@ -53,12 +125,14 @@ trivy_image_scan:
   only:
     - main
 
+# ─── Stage 8: Deploy ──────────────────────────────────────────
 deploy:
   stage: deploy
   image:
     name: bitnami/kubectl:1.30
     entrypoint: [""]
   script:
+    - echo "=== Deploying to Kubernetes ==="
     - mkdir -p ~/.kube
     - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
     - chmod 600 ~/.kube/config
@@ -68,12 +142,14 @@ deploy:
   only:
     - main
 
+# ─── Stage 9: Verify ──────────────────────────────────────────
 verify:
   stage: verify
   image:
     name: bitnami/kubectl:1.30
     entrypoint: [""]
   script:
+    - echo "=== Verifying deployment ==="
     - mkdir -p ~/.kube
     - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
     - chmod 600 ~/.kube/config
@@ -82,17 +158,5 @@ verify:
     - kubectl get deployment $APP_NAME -n $NAMESPACE
     - kubectl get pods -n $NAMESPACE -o wide
     - kubectl get svc -n $NAMESPACE
-  only:
-    - main
-
-k8s_config_scan:
-  stage: config-scan
-  script:
-    - trivy config --skip-version-check --format json --output trivy-k8s-config-report.json k8s/
-  artifacts:
-    when: always
-    paths:
-      - trivy-k8s-config-report.json
-    expire_in: 1 week
   only:
     - main
