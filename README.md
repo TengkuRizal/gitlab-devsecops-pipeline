@@ -59,6 +59,38 @@ Every commit to `main` triggers all 9 stages sequentially. A failure in any stag
 
 ---
 
+## Security Hardening
+
+This project goes beyond scanning — the workload itself is hardened before it enters the pipeline.
+
+### Dockerfile — Non-Root + CVE Patching
+
+```dockerfile
+FROM nginxinc/nginx-unprivileged:1.28-alpine  # Runs as UID 101, not root
+USER root
+RUN apk upgrade --no-cache libcrypto3 libssl3  # Patch OpenSSL CVEs at build time
+USER 101
+```
+
+Standard `nginx:alpine` runs as root. This image uses `nginx-unprivileged` (UID 101) and explicitly patches known OpenSSL CVEs before the image is scanned.
+
+### Kubernetes — CIS Benchmark Controls
+
+| Control | Value | Purpose |
+|---|---|---|
+| `seccompProfile` | `RuntimeDefault` | Restrict syscalls to safe default |
+| `runAsNonRoot` | `true` | Block root container execution |
+| `allowPrivilegeEscalation` | `false` | Block setuid/setgid escalation |
+| `readOnlyRootFilesystem` | `true` | Prevent runtime filesystem tampering |
+| `capabilities.drop` | `ALL` | Remove all Linux capabilities |
+| `resources.limits` | CPU + Memory | Prevent resource exhaustion |
+
+emptyDir volumes mount at `/var/cache/nginx`, `/var/run`, `/tmp` — nginx functions normally with a read-only root filesystem.
+
+### NetworkPolicy — Ingress Restriction
+
+Only port 8080 allowed inbound. All other ingress blocked by default.
+
 ## Infrastructure
 
 | Component | Detail |
