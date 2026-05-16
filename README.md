@@ -180,18 +180,22 @@ Welcome to nginx!
 ```
 
 ---
-
+ 
 ## Screenshots
 
 | GitLab Pipeline Success |
 |---|
-| ![GitLab Pipeline Success](screenshot/gitlab-pipeline-success.png) |
+| ![GitLab Pipeline Success](screenshots/gitlab-pipeline-success.png) |
 
 | Pipeline Stages |
 |---|
-| ![Pipeline Stages](screenshot/pipeline-stages.png) |
+| ![Pipeline Stages](screenshots/pipeline-stages.png) |
 
-| Kubernetes Pods Running |
+| Kubernetes Nodes Ready |
+|---|
+| ![Kubernetes Nodes Ready](screenshots/kubernetes-nodes-ready.png) |
+
+| Kubernetes Deployment Validation |
 |---|
 | ![Kubernetes Pods Running](screenshots/kubernetes-pods-running.png) |
 
