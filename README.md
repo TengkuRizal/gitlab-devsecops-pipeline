@@ -93,8 +93,6 @@ Verify Rollout
 
 ---
 
----
-
 ## Security Controls
 
 | Security Control | Implementation |
