@@ -1,171 +1,251 @@
 # gitlab-devsecops-pipeline
 
-9-stage DevSecOps CI/CD pipeline built on self-hosted GitLab CE, integrating secret scanning, SAST, container scanning, SBOM generation, and automated Kubernetes deployment.
+A hands-on DevSecOps CI/CD pipeline project using self-hosted GitLab, GitLab Runner, Kubernetes, and security scanning tools such as Gitleaks, Semgrep, Trivy, and Syft.
 
-![Pipeline](https://img.shields.io/badge/Pipeline-9%20Stages-brightgreen)
-![GitLab](https://img.shields.io/badge/GitLab-CE%20Self--Hosted-FC6D26?logo=gitlab)
-![Kubernetes](https://img.shields.io/badge/Deploy-Kubernetes-326CE5?logo=kubernetes)
-![Status](https://img.shields.io/badge/Status-Passing-brightgreen)
+This project demonstrates how application delivery can be automated while security checks are enforced before deployment to Kubernetes.
 
----
-
-## Pipeline Overview
-
-Every commit to `main` triggers all 9 stages sequentially. A failure in any stage blocks deployment.
-
-<pre>
-┌─────────────┐
-│  Git Commit │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  Stage 1: validate      │  kubectl dry-run on K8s manifests        │
-├─────────────────────────┼───────────────────────────────────────────┤
-│  Stage 2: secret-scan   │  Gitleaks — detect hardcoded secrets      │
-├─────────────────────────┼───────────────────────────────────────────┤
-│  Stage 3: sast          │  Semgrep — static application analysis    │
-├─────────────────────────┼───────────────────────────────────────────┤
-│  Stage 4: config-scan   │  Trivy — K8s manifest misconfiguration    │
-├─────────────────────────┼───────────────────────────────────────────┤
-│  Stage 5: build-image   │  Docker build + push to GitLab Registry   │
-├─────────────────────────┼───────────────────────────────────────────┤
-│  Stage 6: sbom          │  Syft — CycloneDX SBOM generation         │
-├─────────────────────────┼───────────────────────────────────────────┤
-│  Stage 7: image-scan    │  Trivy — HIGH/CRITICAL CVE scan on image  │
-├─────────────────────────┼───────────────────────────────────────────┤
-│  Stage 8: deploy        │  kubectl apply to Kubernetes cluster       │
-├─────────────────────────┼───────────────────────────────────────────┤
-│  Stage 9: verify        │  kubectl status check post-deployment      │
-└─────────────────────────┴───────────────────────────────────────────┘
-       │
-       ▼
-┌─────────────┐
-│  Production │
-└─────────────┘
-</pre>
+![GitLab CI/CD](https://img.shields.io/badge/GitLab-CI%2FCD-FC6D26?logo=gitlab)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-Deployment-326CE5?logo=kubernetes)
+![DevSecOps](https://img.shields.io/badge/DevSecOps-Security%20Pipeline-brightgreen)
+![Trivy](https://img.shields.io/badge/Trivy-Image%20%26%20Config%20Scan-blue)
+![Semgrep](https://img.shields.io/badge/Semgrep-SAST-purple)
 
 ---
 
-## Security Tools
+## Overview
 
-| Stage | Tool | Purpose | Output |
-|---|---|---|---|
-| secret-scan | Gitleaks | Detect hardcoded secrets, API keys, tokens | `gitleaks-report.json` |
-| sast | Semgrep | Static code analysis, insecure patterns | `semgrep-report.json` |
-| config-scan | Trivy | K8s manifest security misconfiguration | `trivy-k8s-config-report.json` |
-| sbom | Syft | Software Bill of Materials (CycloneDX) | `sbom-cyclonedx.json` |
-| image-scan | Trivy | Container image CVE scan (HIGH/CRITICAL) | `trivy-image-report.json` |
+This project implements a DevSecOps pipeline that validates, scans, builds, deploys, and verifies a Kubernetes workload through GitLab CI/CD.
+
+The pipeline is designed to simulate a real-world secure software delivery process where security is shifted left into the CI/CD workflow.
+
+The pipeline includes:
+
+- Kubernetes manifest validation
+- Secret scanning
+- Static application security testing
+- Kubernetes configuration scanning
+- Docker image build
+- Software Bill of Materials generation
+- Container image vulnerability scanning
+- Kubernetes deployment
+- Deployment rollout verification
 
 ---
 
-## Security Hardening
+## Problem Statement
 
-This project goes beyond scanning — the workload itself is hardened before it enters the pipeline.
+Traditional CI/CD pipelines often focus only on build and deployment. Security checks are usually performed too late, after the application has already been deployed.
 
-### Dockerfile — Non-Root + CVE Patching
+This can lead to:
 
-```dockerfile
-FROM nginxinc/nginx-unprivileged:1.28-alpine  # Runs as UID 101, not root
-USER root
-RUN apk upgrade --no-cache libcrypto3 libssl3  # Patch OpenSSL CVEs at build time
-USER 101
+- Secrets being committed into repositories
+- Vulnerable dependencies entering the build
+- Insecure Kubernetes manifests
+- Container images with known CVEs
+- Lack of deployment verification
+- Weak visibility into release quality
+
+This project solves that by integrating security checks directly into the CI/CD pipeline before deployment.
+
+---
+
+## Pipeline Architecture
+
+```text
+Developer Push
+      ↓
+GitLab CI/CD Pipeline
+      ↓
+Validate Kubernetes Manifests
+      ↓
+Secret Scan - Gitleaks
+      ↓
+SAST - Semgrep
+      ↓
+Kubernetes Config Scan - Trivy
+      ↓
+Build Docker Image
+      ↓
+Generate SBOM - Syft
+      ↓
+Image Scan - Trivy
+      ↓
+Deploy to Kubernetes
+      ↓
+Verify Rollout
 ```
 
-Standard `nginx:alpine` runs as root. This image uses `nginx-unprivileged` (UID 101) and explicitly patches known OpenSSL CVEs before the image is scanned.
+---
 
-### Kubernetes — CIS Benchmark Controls
+## Pipeline Stages
 
-| Control | Value | Purpose |
+| Stage | Tool | Purpose |
 |---|---|---|
-| `seccompProfile` | `RuntimeDefault` | Restrict syscalls to safe default |
-| `runAsNonRoot` | `true` | Block root container execution |
-| `allowPrivilegeEscalation` | `false` | Block setuid/setgid escalation |
-| `readOnlyRootFilesystem` | `true` | Prevent runtime filesystem tampering |
-| `capabilities.drop` | `ALL` | Remove all Linux capabilities |
-| `resources.limits` | CPU + Memory | Prevent resource exhaustion |
+| Validate | kubectl | Validate Kubernetes manifests before deployment |
+| Secret Scan | Gitleaks | Detect leaked secrets, tokens, passwords, and API keys |
+| SAST | Semgrep | Detect insecure code patterns and security weaknesses |
+| Config Scan | Trivy | Scan Kubernetes manifests for misconfigurations |
+| Build | Docker | Build the application container image |
+| SBOM | Syft | Generate Software Bill of Materials for dependency visibility |
+| Image Scan | Trivy | Detect CVEs and vulnerabilities in the container image |
+| Deploy | kubectl | Deploy the workload to Kubernetes |
+| Verify | kubectl rollout | Verify that the Kubernetes deployment is healthy |
 
-emptyDir volumes mount at `/var/cache/nginx`, `/var/run`, `/tmp` — nginx functions normally with a read-only root filesystem.
+---
 
-### NetworkPolicy — Ingress Restriction
+## Security Controls
 
-Only port 8080 allowed inbound. All other ingress blocked by default.
-
-## Infrastructure
-
-| Component | Detail |
+| Security Control | Implementation |
 |---|---|
-| GitLab CE | Self-hosted, 10.10.1.101 |
-| GitLab Runner | Shell executor, 10.10.1.21 |
-| Container Registry | GitLab built-in registry |
-| Kubernetes | 3-node kubeadm cluster |
-| Deploy target | Namespace `demo`, deployment `demo-nginx` |
-
-Runner tools installed directly (shell executor):
-- `gitleaks` `/usr/local/bin/gitleaks`
-- `semgrep` `/home/runner/.local/bin/semgrep`
-- `trivy` `/usr/bin/trivy`
-- `syft` `/usr/local/bin/syft`
-- `kubectl` `/usr/bin/kubectl`
-- `docker` v29.4.3
+| Secret detection | Gitleaks scans the repository for exposed credentials |
+| Static code analysis | Semgrep checks source code for insecure patterns |
+| Kubernetes manifest scanning | Trivy checks Kubernetes YAML files for misconfigurations |
+| Container vulnerability scanning | Trivy scans the built Docker image for known CVEs |
+| SBOM generation | Syft generates dependency inventory for supply chain visibility |
+| Deployment validation | `kubectl rollout status` confirms deployment health |
+| Credential protection | Sensitive values are stored as GitLab CI/CD variables and are not committed |
 
 ---
 
-## Artifacts
+## Kubernetes Deployment
 
-Every pipeline run produces security artifacts retained for 7 days:
+The pipeline deploys a demo workload into a Kubernetes cluster using GitLab CI/CD and kubectl.
 
-<pre>
-pipeline-artifacts/
-├── validate-report.txt          # K8s manifest dry-run output
-├── gitleaks-report.json         # Secret scan results
-├── semgrep-report.json          # SAST findings
-├── trivy-k8s-config-report.json # K8s config issues
-├── sbom-cyclonedx.json          # Software Bill of Materials
-└── trivy-image-report.json      # Container CVE scan results
-</pre>
+Example deployment flow:
 
----
-
-## Pipeline Result
-
-<pre>
-Pipeline #76 — Passed ✅
-Duration   : 48 seconds
-Stages     : 9/9 passed
-Branch     : main
-Runner     : gitrunner (shell executor)
-</pre>
+```text
+GitLab Runner
+      ↓
+kubectl command
+      ↓
+Kubernetes API Server
+      ↓
+Namespace: demo
+      ↓
+Deployment + Service
+      ↓
+Application exposed via NodePort
+```
 
 ---
 
-## Security Design
+## Repository Structure
 
-**Why shell executor over Docker executor?**
-All security tools (Gitleaks, Semgrep, Trivy, Syft) are installed directly on the runner. This avoids Docker-in-Docker complexity and reduces attack surface — no privileged containers required.
-
-**Why block on ALL security stages?**
-`allow_failure: false` is set on secret-scan, sast, and image-scan. A single HIGH/CRITICAL finding or detected secret stops the pipeline. Security gates are not advisory — they are mandatory.
-
-**Why SBOM?**
-CycloneDX SBOM provides a complete inventory of all software components in the container image. This supports vulnerability tracking, license compliance, and supply chain security visibility.
-
-**Why verify stage after deploy?**
-Deployment success does not equal workload health. The verify stage confirms pods are running, services are exposed, and the rollout completed — not just that `kubectl apply` returned 0.
+```text
+gitlab-devsecops-pipeline/
+├── README.md
+├── .gitlab-ci.yml
+├── architecture/
+│   └── pipeline-flow.md
+├── kubernetes/
+│   ├── namespace.yaml
+│   ├── deployment.yaml
+│   └── service.yaml
+├── runbooks/
+│   ├── deployment-runbook.md
+│   ├── rollback-runbook.md
+│   └── troubleshooting.md
+├── screenshots/
+│   ├── gitlab-pipeline-success.png
+│   ├── pipeline-stages.png
+│   ├── kubernetes-pods-running.png
+│   └── deployment-rollout-success.png
+└── docs/
+    └── interview-explanation.md
+```
 
 ---
 
-## Related Projects
+## Deployment Validation
 
-| Project | Description |
+The deployment can be validated using:
+
+```bash
+kubectl get namespace demo
+kubectl get pods -n demo
+kubectl get svc -n demo
+kubectl rollout status deployment/demo-nginx -n demo
+```
+
+Application access can be tested using NodePort:
+
+```bash
+curl http://<node-ip>:<nodeport>
+```
+
+Expected result:
+
+```text
+Welcome to nginx!
+```
+
+---
+
+## Screenshots
+
+| GitLab Pipeline Success |
+|---|
+| ![GitLab Pipeline Success](screenshots/gitlab-pipeline-success.png) |
+
+| Pipeline Stages |
+|---|
+| ![Pipeline Stages](screenshots/pipeline-stages.png) |
+
+| Kubernetes Pods Running |
+|---|
+| ![Kubernetes Pods Running](screenshots/kubernetes-pods-running.png) |
+
+---
+
+## Runbooks
+
+Operational runbooks are included to document deployment, rollback, and troubleshooting procedures.
+
+| Runbook | Description |
 |---|---|
-| [devsecops-homelab](https://github.com/TengkuRizal/devsecops-homelab) | Full homelab architecture |
-| [terraform-aws-devsecops](https://github.com/TengkuRizal/terraform-aws-devsecops) | AWS IaC with Checkov scanning |
+| [Deployment Runbook](runbooks/deployment-runbook.md) | Steps to deploy and validate the workload |
+| [Rollback Runbook](runbooks/rollback-runbook.md) | Steps to rollback a failed deployment |
+| [Troubleshooting Guide](runbooks/troubleshooting.md) | Common pipeline and Kubernetes issues |
+
+---
+
+## Interview Talking Points
+
+This project demonstrates my ability to design and operate a secure CI/CD pipeline using GitLab and Kubernetes.
+
+Key points I can explain:
+
+- How GitLab CI/CD automates secure application delivery
+- Why security scanning should happen before deployment
+- How Gitleaks, Semgrep, Trivy, and Syft fit into a DevSecOps pipeline
+- How Kubernetes deployments are validated after release
+- How CI/CD credentials should be protected using GitLab variables
+- How failed deployments can be rolled back using Kubernetes rollout commands
+- How this pipeline can be improved for production with approval gates and GitOps
+
+Example explanation:
+
+> I built this GitLab DevSecOps pipeline to demonstrate secure software delivery into Kubernetes. The pipeline validates Kubernetes manifests, scans for secrets, runs SAST, checks Kubernetes configuration, builds a container image, generates an SBOM, scans the image for vulnerabilities, deploys to Kubernetes, and verifies the rollout. This shows how security can be shifted left while still maintaining automated delivery.
+
+---
+
+## Future Improvements
+
+- Add manual approval before production deployment
+- Add separate environments for dev, staging, and production
+- Add GitOps deployment using ArgoCD
+- Add image signing using Cosign
+- Add admission control using Kyverno
+- Add container runtime monitoring using Falco
+- Add GitLab security dashboard integration
+- Add automated rollback on failed health checks
+- Add Slack or email notification for failed security stages
+- Add policy-as-code enforcement using OPA or Conftest
 
 ---
 
 ## Author
 
-**Tengku Rizal** — DevSecOps Engineer
-Building: GitLab CI/CD · Kubernetes · Wazuh SIEM · Terraform · Security Automation
+**Tengku Rizal** — DevSecOps Engineer  
+Building: GitLab CI/CD · Kubernetes · Wazuh SIEM · Terraform · Security Automation  
 Location: Kuala Lumpur, Malaysia
