@@ -189,7 +189,7 @@ Welcome to nginx!
 
 | Pipeline Stages |
 |---|
-| ![Pipeline Stages](screenshots/pipeline-stages.png) |
+| ![Pipeline Stages](screenshot/pipeline-stages.png) |
 
 | Kubernetes Pods Running |
 |---|
