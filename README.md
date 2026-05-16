@@ -80,7 +80,7 @@ Verify Rollout
 ## Pipeline Stages
 
 | Stage | Tool | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | Validate | kubectl | Validate Kubernetes manifests before deployment |
 | Secret Scan | Gitleaks | Detect leaked secrets, tokens, passwords, and API keys |
 | SAST | Semgrep | Detect insecure code patterns and security weaknesses |
@@ -93,10 +93,12 @@ Verify Rollout
 
 ---
 
+---
+
 ## Security Controls
 
 | Security Control | Implementation |
-|---|---|
+| --- | --- |
 | Secret detection | Gitleaks scans the repository for exposed credentials |
 | Static code analysis | Semgrep checks source code for insecure patterns |
 | Kubernetes manifest scanning | Trivy checks Kubernetes YAML files for misconfigurations |
@@ -145,7 +147,7 @@ gitlab-devsecops-pipeline/
     ├── pipeline-stages.png
     ├── kubernetes-nodes-ready.png
     └── kubernetes-pods-running.png
-
+```
 ---
 
 ## Deployment Validation
@@ -175,21 +177,21 @@ Welcome to nginx!
  
 ## Screenshots
 
-| GitLab Pipeline Success |
-|---|
-| ![GitLab Pipeline Success](screenshots/gitlab-pipeline-success.png) |
+### GitLab Pipeline Success
 
-| Pipeline Stages |
-|---|
-| ![Pipeline Stages](screenshots/pipeline-stages.png) |
+![GitLab Pipeline Success](screenshots/gitlab-pipeline-success.png)
 
-| Kubernetes Nodes Ready |
-|---|
-| ![Kubernetes Nodes Ready](screenshots/kubernetes-nodes-ready.png) |
+### Pipeline Stages
 
-| Kubernetes Deployment Validation |
-|---|
-| ![Kubernetes Pods Running](screenshots/kubernetes-pods-running.png) |
+![Pipeline Stages](screenshots/pipeline-stages.png)
+
+### Kubernetes Nodes Ready
+
+![Kubernetes Nodes Ready](screenshots/kubernetes-nodes-ready.png)
+
+### Kubernetes Deployment Validation
+
+![Kubernetes Pods Running](screenshots/kubernetes-pods-running.png)
 
 ---
 
@@ -198,7 +200,7 @@ Welcome to nginx!
 This project currently documents deployment validation directly in the README. Future runbooks will be added for:
 
 | Runbook | Purpose |
-|---|---|
+| --- | --- |
 | Deployment Runbook | Standard deployment and validation steps |
 | Rollback Runbook | Rollback process using Kubernetes rollout commands |
 | Troubleshooting Guide | Common GitLab CI/CD and Kubernetes deployment issues |
