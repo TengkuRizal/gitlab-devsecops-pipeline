@@ -85,7 +85,7 @@ Verify Rollout
 | Secret Scan | Gitleaks | Detect leaked secrets, tokens, passwords, and API keys |
 | SAST | Semgrep | Detect insecure code patterns and security weaknesses |
 | Config Scan | Trivy | Scan Kubernetes manifests for misconfigurations |
-| Build | Docker | Build the application container image |
+| Build Image | Docker | Build the application container image |
 | SBOM | Syft | Generate Software Bill of Materials for dependency visibility |
 | Image Scan | Trivy | Detect CVEs and vulnerabilities in the container image |
 | Deploy | kubectl | Deploy the workload to Kubernetes |
@@ -135,24 +135,16 @@ Application exposed via NodePort
 gitlab-devsecops-pipeline/
 ├── README.md
 ├── .gitlab-ci.yml
-├── architecture/
-│   └── pipeline-flow.md
-├── kubernetes/
+├── Dockerfile
+├── k8s/
 │   ├── namespace.yaml
 │   ├── deployment.yaml
 │   └── service.yaml
-├── runbooks/
-│   ├── deployment-runbook.md
-│   ├── rollback-runbook.md
-│   └── troubleshooting.md
-├── screenshots/
-│   ├── gitlab-pipeline-success.png
-│   ├── pipeline-stages.png
-│   ├── kubernetes-pods-running.png
-│   └── deployment-rollout-success.png
-└── docs/
-    └── interview-explanation.md
-```
+└── screenshots/
+    ├── gitlab-pipeline-success.png
+    ├── pipeline-stages.png
+    ├── kubernetes-nodes-ready.png
+    └── kubernetes-pods-running.png
 
 ---
 
@@ -201,15 +193,15 @@ Welcome to nginx!
 
 ---
 
-## Runbooks
+## Operational Notes
 
-Operational runbooks are included to document deployment, rollback, and troubleshooting procedures.
+This project currently documents deployment validation directly in the README. Future runbooks will be added for:
 
-| Runbook | Description |
+| Runbook | Purpose |
 |---|---|
-| [Deployment Runbook](runbooks/deployment-runbook.md) | Steps to deploy and validate the workload |
-| [Rollback Runbook](runbooks/rollback-runbook.md) | Steps to rollback a failed deployment |
-| [Troubleshooting Guide](runbooks/troubleshooting.md) | Common pipeline and Kubernetes issues |
+| Deployment Runbook | Standard deployment and validation steps |
+| Rollback Runbook | Rollback process using Kubernetes rollout commands |
+| Troubleshooting Guide | Common GitLab CI/CD and Kubernetes deployment issues |
 
 ---
 
