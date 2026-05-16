@@ -185,7 +185,7 @@ Welcome to nginx!
 
 | GitLab Pipeline Success |
 |---|
-| ![GitLab Pipeline Success](screenshots/gitlab-pipeline-success.png) |
+| ![GitLab Pipeline Success](screenshot/gitlab-pipeline-success.png) |
 
 | Pipeline Stages |
 |---|
