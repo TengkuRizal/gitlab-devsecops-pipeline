@@ -19,10 +19,9 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: nginx
-          image: nginxinc/nginx-unprivileged:1.28-alpine
-          ports:
-            - containerPort: 8080
+      name: demo-nginx
+         image: 10.10.1.101:5050/kujal/demo-nginx/demo-nginx:latest
+            containerPort: 8080
           resources:
             requests:
               cpu: "50m"
