@@ -19,9 +19,8 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-      name: demo-nginx
-         image: 10.10.1.101:5050/kujal/demo-nginx/demo-nginx:latest
-            containerPort: 8080
+        - name: demo-nginx
+          image: 10.10.1.101:5050/kujal/demo-nginx/demo-nginx:latest
           resources:
             requests:
               cpu: "50m"
