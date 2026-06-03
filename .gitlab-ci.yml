@@ -139,8 +139,8 @@ deploy:
     - git config user.email "gitlab-ci@homelab.local"
     - git config user.name "GitLab CI"
     - git add kubernetes/deployment.yaml
-    - git commit -m "ci update image tag to $IMAGE_TAG [skip ci]"
-    - git push origin main
+    - git commit -m "ci update image tag to $IMAGE_TAG [skip ci]" || echo "Nothing to commit"
+    - git push origin main || echo "Nothing to push"
     - echo "ArgoCD will detect GitHub change and sync"
   only:
     - main
