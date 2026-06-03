@@ -80,7 +80,7 @@ k8s_config_scan:
 # ─── Stage 5: Build Image ─────────────────────────────────────
 build-image:
   stage: build-image
-  script:
+   script:
     - echo "=== Building and pushing Docker image ==="
     - echo "CI_REGISTRY=$CI_REGISTRY"
     - test -n "$CI_REGISTRY" || (echo "CI_REGISTRY is empty." && exit 1)
@@ -150,19 +150,48 @@ deploy:
     - echo "=== Deploy triggered via ArgoCD GitOps sync ==="
   only:
     - main
-
 # ─── Stage 9: Verify ──────────────────────────────────────────
 verify:
   stage: verify
   script:
-    - echo "=== Verifying deployment ==="
+    - echo "=== Verifying ArgoCD sync ==="
     - mkdir -p ~/.kube
     - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
     - chmod 600 ~/.kube/config
     - export KUBECONFIG=~/.kube/config
-    - kubectl get namespace $NAMESPACE
-    - kubectl get deployment $APP_NAME -n $NAMESPACE
-    - kubectl get pods -n $NAMESPACE -o wide
-    - kubectl get svc -n $NAMESPACE
+
+    - echo "=== Waiting for ArgoCD to sync ==="
+    - |
+      for i in $(seq 1 12); do
+        SYNC=$(kubectl get application demo-nginx -n argocd -o jsonpath='{.status.sync.status}')
+        HEALTH=$(kubectl get application demo-nginx -n argocd -o jsonpath='{.status.health.status}')
+        echo "Attempt $i/12 — Sync: $SYNC | Health: $HEALTH"
+        if [ "$SYNC" = "Synced" ] && [ "$HEALTH" = "Healthy" ]; then
+          echo "ArgoCD sync confirmed."
+          break
+        fi
+        sleep 10
+      done
+
+    - echo "=== Final cluster state ==="
+    - kubectl get pods -n demo -o wide
+    - kubectl get deployment demo-nginx -n demo
+
+    - echo "=== Confirm image tag deployed ==="
+    - kubectl get pods -n demo -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[0].image}{"\n"}{end}'
+
+    - echo "=== Smoke test ==="
+    - NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+    - NODE_PORT=$(kubectl get svc demo-nginx -n demo -o jsonpath='{.spec.ports[0].nodePort}')
+    - echo "Testing http://$NODE_IP:$NODE_PORT"
+    - |
+      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://$NODE_IP:$NODE_PORT)
+      echo "HTTP response: $HTTP_CODE"
+      if [ "$HTTP_CODE" != "200" ]; then
+        echo "ERROR: Smoke test failed — expected 200, got $HTTP_CODE"
+        exit 1
+      fi
+      echo "Smoke test passed."
   only:
     - main
+  
