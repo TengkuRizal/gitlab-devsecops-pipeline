@@ -148,26 +148,19 @@ deploy:
     - main
 
 # ─── Stage 9: Verify ──────────────────────────────────────────
+# ─── Stage 9: Verify ──────────────────────────────────────────
 verify:
   stage: verify
   script:
-    - echo "=== Verifying ArgoCD sync ==="
     - mkdir -p ~/.kube
     - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
     - chmod 600 ~/.kube/config
     - export KUBECONFIG=~/.kube/config
-    - echo "=== Waiting for ArgoCD to sync ==="
-    - |
-      for i in $(seq 1 12); do
-        SYNC=$(kubectl get application demo-nginx -n argocd -o jsonpath='{.status.sync.status}')
-        HEALTH=$(kubectl get application demo-nginx -n argocd -o jsonpath='{.status.health.status}')
-        echo "Attempt $i/12 — Sync: $SYNC | Health: $HEALTH"
-        if [ "$SYNC" = "Synced" ] && [ "$HEALTH" = "Healthy" ]; then
-          echo "ArgoCD sync confirmed."
-          break
-        fi
-        sleep 10
-      done
+    - echo "=== Waiting 30s for ArgoCD to sync ==="
+    - sleep 30
+    - echo "=== ArgoCD sync status ==="
+    - kubectl get application demo-nginx -n argocd -o jsonpath='{.status.sync.status}'
+    - kubectl get application demo-nginx -n argocd -o jsonpath='{.status.health.status}'
     - echo "=== Final cluster state ==="
     - kubectl get pods -n demo -o wide
     - kubectl get deployment demo-nginx -n demo
@@ -177,13 +170,9 @@ verify:
     - NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
     - NODE_PORT=$(kubectl get svc demo-nginx -n demo -o jsonpath='{.spec.ports[0].nodePort}')
     - echo "Testing http://$NODE_IP:$NODE_PORT"
-    - |
-      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://$NODE_IP:$NODE_PORT)
-      echo "HTTP response: $HTTP_CODE"
-      if [ "$HTTP_CODE" != "200" ]; then
-        echo "ERROR: Smoke test failed — expected 200, got $HTTP_CODE"
-        exit 1
-      fi
-      echo "Smoke test passed."
+    - HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://$NODE_IP:$NODE_PORT)
+    - echo "HTTP response $HTTP_CODE"
+    - test "$HTTP_CODE" = "200" || (echo "ERROR smoke test failed" && exit 1)
+    - echo "Smoke test passed."
   only:
     - main
