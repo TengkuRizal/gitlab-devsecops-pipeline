@@ -114,25 +114,35 @@ trivy_image_scan:
   allow_failure: false
   only:
     - main
-
 deploy:
   stage: deploy
   script:
-    - echo "GitOps Deploy - Updating image tag in Git"
+    - echo "GitOps Deploy - Updating image tag"
     - IMAGE_TAG="$CI_COMMIT_SHORT_SHA"
     - echo "New image tag $IMAGE_TAG"
+    - echo "Full image $CI_REGISTRY_IMAGE/demo-nginx:$IMAGE_TAG"
+    - echo "Step 1 - Update GitLab CE repo"
     - git config user.email "gitlab-ci@homelab.local"
     - git config user.name "GitLab CI"
     - git remote set-url origin "http://gitlab-ci-token:${GITLAB_PUSH_TOKEN}@10.10.1.101/kujal/demo-nginx.git"
     - sed -i "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE/demo-nginx:$IMAGE_TAG|g" k8s/deployment.yaml
-    - echo "Verify image tag after replacement"
     - grep "image:" k8s/deployment.yaml
     - git add k8s/deployment.yaml
-    - git diff --cached --stat
     - git commit -m "ci update image tag to $IMAGE_TAG [skip ci]" || echo "Nothing to commit"
     - git push origin HEAD:main || echo "Nothing to push"
-    - echo "Deploy triggered via ArgoCD GitOps sync"
+    - echo "Step 2 - Update GitHub repo for ArgoCD"
+    - git clone https://github-token:${GITHUB_TOKEN}@github.com/TengkuRizal/TengkuRizal.git /tmp/github-repo
+    - cd /tmp/github-repo
+    - sed -i "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE/demo-nginx:$IMAGE_TAG|g" kubernetes/deployment.yaml
+    - grep "image:" kubernetes/deployment.yaml
+    - git config user.email "gitlab-ci@homelab.local"
+    - git config user.name "GitLab CI"
+    - git add kubernetes/deployment.yaml
+    - git commit -m "ci update image tag to $IMAGE_TAG [skip ci]"
+    - git push origin main
+    - echo "ArgoCD will detect GitHub change and sync"
   only:
+    - main
     - main
 
 verify:
