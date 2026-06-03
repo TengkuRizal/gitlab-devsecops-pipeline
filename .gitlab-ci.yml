@@ -124,7 +124,7 @@ deploy:
     - git config user.email "gitlab-ci@homelab.local"
     - git config user.name "GitLab CI"
     - git remote set-url origin "http://gitlab-ci-token:${GITLAB_PUSH_TOKEN}@10.10.1.101/kujal/demo-nginx.git"
-    - sed -i "s|image: .*/demo-nginx:.*|image: $CI_REGISTRY_IMAGE/demo-nginx:$IMAGE_TAG|g" k8s/deployment.yaml
+    - sed -i "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE/demo-nginx:$IMAGE_TAG|g" k8s/deployment.yaml
     - echo "Verify image tag after replacement"
     - grep "image:" k8s/deployment.yaml
     - git add k8s/deployment.yaml
