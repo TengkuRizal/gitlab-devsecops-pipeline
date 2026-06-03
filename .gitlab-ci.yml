@@ -129,15 +129,8 @@ deploy:
     - grep "image:" k8s/deployment.yaml
     - git add k8s/deployment.yaml
     - git diff --cached --stat
-    - git diff --cached -- k8s/deployment.yaml | grep "^+" || true
-    - >
-      if git diff --cached --quiet; then
-        echo "No changes to commit - image tag already up to date";
-      else
-        git commit -m "ci update image tag to $IMAGE_TAG [skip ci]";
-        git push origin HEAD:main;
-        echo "Pushed updated image tag to repo";
-      fi
+    - git commit -m "ci update image tag to $IMAGE_TAG [skip ci]" || echo "Nothing to commit"
+    - git push origin HEAD:main || echo "Nothing to push"
     - echo "Deploy triggered via ArgoCD GitOps sync"
   only:
     - main
