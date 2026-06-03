@@ -125,23 +125,29 @@ trivy_image_scan:
 deploy:
   stage: deploy
   script:
-    - echo "=== Deploying to Kubernetes ==="
-    - mkdir -p ~/.kube
-    - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
-    - chmod 600 ~/.kube/config
-    - export KUBECONFIG=~/.kube/config
-    - echo "=== Injecting image tag $IMAGE_NAME ==="
-    - sed -i "s|IMAGE_PLACEHOLDER|$IMAGE_NAME|g" k8s/deployment.yaml
-    - echo "=== Verify image tag replaced ==="
+    - echo "=== GitOps Deploy — Updating image tag in Git ==="
+    - IMAGE_TAG="$CI_COMMIT_SHORT_SHA"
+    - echo "New image tag: $IMAGE_TAG"
+    - echo "Full image: $CI_REGISTRY_IMAGE:$IMAGE_TAG"
+
+    - echo "=== Configuring Git ==="
+    - git config user.email "gitlab-ci@homelab.local"
+    - git config user.name "GitLab CI"
+    - git remote set-url origin "http://gitlab-ci-token:${CI_JOB_TOKEN}@10.10.1.101/kujal/demo-nginx.git"
+
+    - echo "=== Updating deployment.yaml image tag ==="
+    - sed -i "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE:$IMAGE_TAG|g" k8s/deployment.yaml
+
+    - echo "=== Verify replacement ==="
     - grep "image:" k8s/deployment.yaml
-    - kubectl apply -f k8s/
-    - |
-      kubectl rollout status deployment/$APP_NAME -n $NAMESPACE --timeout=120s || {
-        echo "ERROR: Rollout failed. Initiating rollback."
-        kubectl rollout undo deployment/$APP_NAME -n $NAMESPACE
-        kubectl describe deployment/$APP_NAME -n $NAMESPACE
-        exit 1
-      }
+
+    - echo "=== Committing updated manifest ==="
+    - git add k8s/deployment.yaml
+    - git diff --cached --stat
+    - git commit -m "ci: update image tag to $IMAGE_TAG [skip ci]"
+    - git push origin HEAD:main
+
+    - echo "=== Deploy triggered via ArgoCD GitOps sync ==="
   only:
     - main
 
