@@ -159,7 +159,6 @@ verify:
     - kubectl get pods -n demo -o wide
     - kubectl get deployment demo-nginx -n demo
     - NODE_IP="10.10.1.70"
-    - NODE_IP="10.10.2.71"
     - NODE_PORT=$(kubectl get svc demo-nginx -n demo -o jsonpath='{.spec.ports[0].nodePort}')
     - echo "Testing http://$NODE_IP:$NODE_PORT"
     - HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://$NODE_IP:$NODE_PORT)
