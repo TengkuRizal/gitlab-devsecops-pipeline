@@ -32,6 +32,7 @@ validate-manifests:
     expire_in: 7 days
   only:
     - main
+
 # ─── Stage 2: Secret Scan ─────────────────────────────────────
 gitleaks-scan:
   stage: secret-scan
@@ -80,7 +81,7 @@ k8s_config_scan:
 # ─── Stage 5: Build Image ─────────────────────────────────────
 build-image:
   stage: build-image
-   script:
+  script:
     - echo "=== Building and pushing Docker image ==="
     - echo "CI_REGISTRY=$CI_REGISTRY"
     - test -n "$CI_REGISTRY" || (echo "CI_REGISTRY is empty." && exit 1)
@@ -129,27 +130,23 @@ deploy:
     - IMAGE_TAG="$CI_COMMIT_SHORT_SHA"
     - echo "New image tag: $IMAGE_TAG"
     - echo "Full image: $CI_REGISTRY_IMAGE:$IMAGE_TAG"
-
     - echo "=== Configuring Git ==="
     - git config user.email "gitlab-ci@homelab.local"
     - git config user.name "GitLab CI"
     - git remote set-url origin "http://gitlab-ci-token:${CI_JOB_TOKEN}@10.10.1.101/kujal/demo-nginx.git"
-
     - echo "=== Updating deployment.yaml image tag ==="
     - sed -i "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE:$IMAGE_TAG|g" k8s/deployment.yaml
-
     - echo "=== Verify replacement ==="
     - grep "image:" k8s/deployment.yaml
-
     - echo "=== Committing updated manifest ==="
     - git add k8s/deployment.yaml
     - git diff --cached --stat
     - git commit -m "ci: update image tag to $IMAGE_TAG [skip ci]"
     - git push origin HEAD:main
-
     - echo "=== Deploy triggered via ArgoCD GitOps sync ==="
   only:
     - main
+
 # ─── Stage 9: Verify ──────────────────────────────────────────
 verify:
   stage: verify
@@ -159,7 +156,6 @@ verify:
     - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
     - chmod 600 ~/.kube/config
     - export KUBECONFIG=~/.kube/config
-
     - echo "=== Waiting for ArgoCD to sync ==="
     - |
       for i in $(seq 1 12); do
@@ -172,14 +168,11 @@ verify:
         fi
         sleep 10
       done
-
     - echo "=== Final cluster state ==="
     - kubectl get pods -n demo -o wide
     - kubectl get deployment demo-nginx -n demo
-
     - echo "=== Confirm image tag deployed ==="
     - kubectl get pods -n demo -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[0].image}{"\n"}{end}'
-
     - echo "=== Smoke test ==="
     - NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
     - NODE_PORT=$(kubectl get svc demo-nginx -n demo -o jsonpath='{.spec.ports[0].nodePort}')
@@ -194,4 +187,3 @@ verify:
       echo "Smoke test passed."
   only:
     - main
-  
