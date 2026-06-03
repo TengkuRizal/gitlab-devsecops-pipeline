@@ -130,8 +130,18 @@ deploy:
     - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
     - chmod 600 ~/.kube/config
     - export KUBECONFIG=~/.kube/config
+    - echo "=== Injecting image tag $IMAGE_NAME ==="
+    - sed -i "s|IMAGE_PLACEHOLDER|$IMAGE_NAME|g" k8s/deployment.yaml
+    - echo "=== Verify image tag replaced ==="
+    - grep "image:" k8s/deployment.yaml
     - kubectl apply -f k8s/
-    - kubectl rollout status deployment/$APP_NAME -n $NAMESPACE
+    - |
+      kubectl rollout status deployment/$APP_NAME -n $NAMESPACE --timeout=120s || {
+        echo "ERROR: Rollout failed. Initiating rollback."
+        kubectl rollout undo deployment/$APP_NAME -n $NAMESPACE
+        kubectl describe deployment/$APP_NAME -n $NAMESPACE
+        exit 1
+      }
   only:
     - main
 
