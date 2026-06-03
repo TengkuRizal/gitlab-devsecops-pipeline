@@ -20,7 +20,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: demo-nginx
-          image: IMAGE_PLACEHOLDER
+          image: 10.10.1.101:5050/kujal/demo-nginx:1e90a3e3
           resources:
             requests:
               cpu: "50m"
