@@ -131,7 +131,7 @@ deploy:
     - git commit -m "ci update image tag to $IMAGE_TAG [skip ci]" || echo "Nothing to commit"
     - git push origin HEAD:main || echo "Nothing to push"
     - echo "Step 2 - Update GitHub repo for ArgoCD"
-    - git clone https://github-token:${GITHUB_TOKEN}@github.com/TengkuRizal/TengkuRizal.git /tmp/github-repo
+    - rm -rf /tmp/github-repo && git clone https://github-token:${GITHUB_TOKEN}@github.com/TengkuRizal/TengkuRizal.git /tmp/github-repo
     - cd /tmp/github-repo
     - sed -i "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE/demo-nginx:$IMAGE_TAG|g" kubernetes/deployment.yaml
     - grep "image:" kubernetes/deployment.yaml
