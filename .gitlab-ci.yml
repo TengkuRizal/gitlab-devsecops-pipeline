@@ -12,7 +12,7 @@ stages:
 variables:
   NAMESPACE: "demo"
   APP_NAME: "demo-nginx"
-  IMAGE_NAME: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+  IMAGE_NAME: "$CI_REGISTRY_IMAGE/demo-nginx:$CI_COMMIT_SHORT_SHA"
 
 validate-manifests:
   stage: validate
