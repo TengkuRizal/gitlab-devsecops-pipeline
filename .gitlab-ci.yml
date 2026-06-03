@@ -14,11 +14,10 @@ variables:
   APP_NAME: "demo-nginx"
   IMAGE_NAME: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
 
-# ─── Stage 1: Validate ────────────────────────────────────────
 validate-manifests:
   stage: validate
   script:
-    - echo "=== Validating Kubernetes manifests ==="
+    - echo "Validating Kubernetes manifests"
     - mkdir -p ~/.kube
     - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
     - chmod 600 ~/.kube/config
@@ -33,11 +32,10 @@ validate-manifests:
   only:
     - main
 
-# ─── Stage 2: Secret Scan ─────────────────────────────────────
 gitleaks-scan:
   stage: secret-scan
   script:
-    - echo "=== Scanning for secrets with Gitleaks ==="
+    - echo "Scanning for secrets with Gitleaks"
     - gitleaks detect --source . --verbose --report-format json --report-path gitleaks-report.json
   artifacts:
     when: always
@@ -48,11 +46,10 @@ gitleaks-scan:
   only:
     - main
 
-# ─── Stage 3: SAST ────────────────────────────────────────────
 semgrep-sast:
   stage: sast
   script:
-    - echo "=== Running Semgrep SAST ==="
+    - echo "Running Semgrep SAST"
     - /home/runner/.local/bin/semgrep scan --config=auto --json --output semgrep-report.json . || true
     - echo "Semgrep scan complete"
   artifacts:
@@ -64,11 +61,10 @@ semgrep-sast:
   only:
     - main
 
-# ─── Stage 4: Config Scan ─────────────────────────────────────
 k8s_config_scan:
   stage: config-scan
   script:
-    - echo "=== Scanning K8s manifests with Trivy ==="
+    - echo "Scanning K8s manifests with Trivy"
     - trivy config --skip-version-check --format json --output trivy-k8s-config-report.json k8s/
   artifacts:
     when: always
@@ -78,11 +74,10 @@ k8s_config_scan:
   only:
     - main
 
-# ─── Stage 5: Build Image ─────────────────────────────────────
 build-image:
   stage: build-image
   script:
-    - echo "=== Building and pushing Docker image ==="
+    - echo "Building and pushing Docker image"
     - echo "CI_REGISTRY=$CI_REGISTRY"
     - test -n "$CI_REGISTRY" || (echo "CI_REGISTRY is empty." && exit 1)
     - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
@@ -91,11 +86,10 @@ build-image:
   only:
     - main
 
-# ─── Stage 6: SBOM ────────────────────────────────────────────
 generate-sbom:
   stage: sbom
   script:
-    - echo "=== Generating SBOM with Syft ==="
+    - echo "Generating SBOM with Syft"
     - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
     - syft "$IMAGE_NAME" -o cyclonedx-json=sbom-cyclonedx.json
   artifacts:
@@ -106,11 +100,10 @@ generate-sbom:
   only:
     - main
 
-# ─── Stage 7: Image Scan ──────────────────────────────────────
 trivy_image_scan:
   stage: image-scan
   script:
-    - echo "=== Scanning container image with Trivy ==="
+    - echo "Scanning container image with Trivy"
     - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
     - trivy image --skip-version-check --skip-java-db-update --severity HIGH,CRITICAL --format json --output trivy-image-report.json "$IMAGE_NAME"
   artifacts:
@@ -122,57 +115,45 @@ trivy_image_scan:
   only:
     - main
 
-# ─── Stage 8: Deploy ──────────────────────────────────────────
 deploy:
   stage: deploy
   script:
-    - echo "=== GitOps Deploy — Updating image tag in Git ==="
+    - echo "GitOps Deploy - Updating image tag in Git"
     - IMAGE_TAG="$CI_COMMIT_SHORT_SHA"
-    - echo "New image tag: $IMAGE_TAG"
-    - echo "Full image: $CI_REGISTRY_IMAGE:$IMAGE_TAG"
-    - echo "=== Configuring Git ==="
+    - echo "New image tag $IMAGE_TAG"
+    - echo "Full image $CI_REGISTRY_IMAGE:$IMAGE_TAG"
     - git config user.email "gitlab-ci@homelab.local"
     - git config user.name "GitLab CI"
     - git remote set-url origin "http://gitlab-ci-token:${CI_JOB_TOKEN}@10.10.1.101/kujal/demo-nginx.git"
-    - echo "=== Updating deployment.yaml image tag ==="
     - sed -i "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE:$IMAGE_TAG|g" k8s/deployment.yaml
-    - echo "=== Verify replacement ==="
     - grep "image:" k8s/deployment.yaml
-    - echo "=== Committing updated manifest ==="
     - git add k8s/deployment.yaml
     - git diff --cached --stat
-    - git commit -m "ci: update image tag to $IMAGE_TAG [skip ci]"
+    - git commit -m "ci update image tag to $IMAGE_TAG [skip ci]"
     - git push origin HEAD:main
-    - echo "=== Deploy triggered via ArgoCD GitOps sync ==="
+    - echo "Deploy triggered via ArgoCD GitOps sync"
   only:
     - main
 
-# ─── Stage 9: Verify ──────────────────────────────────────────
-# ─── Stage 9: Verify ──────────────────────────────────────────
 verify:
   stage: verify
   script:
+    - echo "Verifying ArgoCD sync"
     - mkdir -p ~/.kube
     - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
     - chmod 600 ~/.kube/config
     - export KUBECONFIG=~/.kube/config
-    - echo "=== Waiting 30s for ArgoCD to sync ==="
     - sleep 30
-    - echo "=== ArgoCD sync status ==="
-    - kubectl get application demo-nginx -n argocd -o jsonpath='{.status.sync.status}'
-    - kubectl get application demo-nginx -n argocd -o jsonpath='{.status.health.status}'
-    - echo "=== Final cluster state ==="
+    - kubectl get application demo-nginx -n argocd
     - kubectl get pods -n demo -o wide
     - kubectl get deployment demo-nginx -n demo
-    - echo "=== Confirm image tag deployed ==="
     - kubectl get pods -n demo -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[0].image}{"\n"}{end}'
-    - echo "=== Smoke test ==="
     - NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
     - NODE_PORT=$(kubectl get svc demo-nginx -n demo -o jsonpath='{.spec.ports[0].nodePort}')
     - echo "Testing http://$NODE_IP:$NODE_PORT"
     - HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://$NODE_IP:$NODE_PORT)
     - echo "HTTP response $HTTP_CODE"
     - test "$HTTP_CODE" = "200" || (echo "ERROR smoke test failed" && exit 1)
-    - echo "Smoke test passed."
+    - echo "Smoke test passed"
   only:
     - main
