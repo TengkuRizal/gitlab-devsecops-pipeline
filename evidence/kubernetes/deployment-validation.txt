@@ -1,0 +1,33 @@
+# Kubernetes Deployment Evidence
+# Date: 2026-06-04
+# Pipeline: GitLab CI/CD DevSecOps 9-stage pipeline
+# GitOps: ArgoCD sync from GitHub
+
+## Pods Running
+NAME                          READY   STATUS    RESTARTS   AGE   IP               NODE
+demo-nginx-6497894596-45jfm   1/1     Running   0          13h   192.168.140.62   k8s-worker-2
+demo-nginx-6497894596-khcwr   1/1     Running   0          13h   192.168.230.13   k8s-worker-1
+
+## Nodes
+NAME           STATUS   ROLES           AGE   VERSION    INTERNAL-IP
+k8master       Ready    control-plane   45d   v1.29.15   10.10.1.70
+k8s-worker-1   Ready    <none>          45d   v1.29.15   10.10.2.71
+k8s-worker-2   Ready    <none>          45d   v1.29.15   10.10.3.72
+
+## ArgoCD Sync Status
+NAME         SYNC STATUS   HEALTH STATUS
+demo-nginx   Synced        Healthy
+
+## Image Tags Deployed (non-latest, commit SHA)
+demo-nginx-6497894596-45jfm     10.10.1.101:5050/kujal/demo-nginx/demo-nginx:bd6b8f7f
+demo-nginx-6497894596-khcwr     10.10.1.101:5050/kujal/demo-nginx/demo-nginx:bd6b8f7f
+
+## Smoke Test Result
+curl http://10.10.1.70:30916 -> HTTP 200 OK
+
+## Security Controls Active
+- Kyverno: disallow-latest-image-tag (Enforce)
+- Kyverno: disallow-privileged-containers (Enforce)
+- Kyverno: require-approved-registry (Audit)
+- ArgoCD: GitOps sync from github.com/TengkuRizal/TengkuRizal
+- GitLab Registry: 10.10.1.101:5050
