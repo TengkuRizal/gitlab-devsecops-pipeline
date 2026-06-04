@@ -1,0 +1,28 @@
+# Kyverno Policy Enforcement Evidence
+# Date: 2026-06-04
+# Policies: disallow-latest-image-tag, require-approved-registry
+# Mode: Enforce
+
+## Test 1 - Block nginx:latest (violates both policies)
+$ kubectl run test-block --image=nginx:latest -n demo
+Error from server: admission webhook "validate.kyverno.svc-fail" denied the request:
+resource Pod/demo/test-block was blocked due to the following policies
+disallow-latest-image-tag:
+  require-explicit-image-tag: 'validation failure: Images must use an explicit non-latest tag.'
+require-approved-registry:
+  only-gitlab-registry: 'validation error: Container images must come from approved
+    GitLab Registry 10.10.1.101:5050. rule only-gitlab-registry failed at path /spec/containers/0/image/'
+
+## Test 2 - Block docker.io/nginx:1.25 (violates registry policy)
+$ kubectl run test-block2 --image=docker.io/nginx:1.25 -n demo
+Error from server: admission webhook "validate.kyverno.svc-fail" denied the request:
+resource Pod/demo/test-block2 was blocked due to the following policies
+require-approved-registry:
+  only-gitlab-registry: 'validation error: Container images must come from approved
+    GitLab Registry 10.10.1.101:5050. rule only-gitlab-registry failed at path /spec/containers/0/image/'
+
+## Conclusion
+- External images blocked at admission controller level
+- Only images from 10.10.1.101:5050 (GitLab Registry) permitted
+- Pipeline enforces commit SHA tagging - no :latest allowed
+- Supply chain integrity enforced end-to-end
