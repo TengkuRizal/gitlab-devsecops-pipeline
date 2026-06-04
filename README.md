@@ -1,96 +1,291 @@
-# demo-nginx
+# gitlab-devsecops-pipeline
 
+A production-style DevSecOps CI/CD pipeline built on self-hosted GitLab CE, deploying to a 3-node Kubernetes cluster via GitOps with ArgoCD. Security is enforced at every stage — from secret scanning and SAST through to admission control at the Kubernetes level.
 
+[![Pipeline](https://img.shields.io/badge/GitLab-CI%2FCD-FC6D26?logo=gitlab)](https://gitlab.com)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-Deployment-326CE5?logo=kubernetes)](https://kubernetes.io)
+[![ArgoCD](https://img.shields.io/badge/ArgoCD-GitOps-EF7B4D?logo=argo)](https://argoproj.github.io)
+[![Kyverno](https://img.shields.io/badge/Policy-Kyverno-00B2B2)](https://kyverno.io)
+[![Trivy](https://img.shields.io/badge/Trivy-Image%20%26%20Config%20Scan-blue)](https://trivy.dev)
 
-## Getting started
+---
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## Overview
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+This project implements a 9-stage DevSecOps pipeline that validates, scans, builds, and deploys a containerised workload to Kubernetes using a GitOps pattern. Security checks are shifted left into the CI/CD workflow, and deployment is enforced through policy-as-code at the admission controller level.
 
-## Add your files
+The pipeline runs on self-hosted GitLab CE and GitLab Runner in a segmented homelab environment. ArgoCD manages deployment by watching a GitHub repository for manifest changes — the pipeline updates the image tag in Git, and ArgoCD reconciles the cluster state.
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+---
+
+## Problem Statement
+
+Traditional CI/CD pipelines focus only on build and deploy. Security is often bolted on after the fact, leading to:
+
+- Secrets committed into repositories
+- Vulnerable dependencies entering production
+- Insecure Kubernetes manifests
+- Container images with known CVEs deployed without scanning
+- No supply chain visibility
+- No policy enforcement at the cluster level
+
+This project addresses all of these by integrating security gates directly into the delivery pipeline and enforcing policy at every layer.
+
+---
+
+## Architecture
 
 ```
-cd existing_repo
-git remote add origin http://10.10.1.101/kujal/demo-nginx.git
-git branch -M main
-git push -uf origin main
+Developer Push
+      |
+GitLab CE (self-hosted)
+      |
+9-Stage CI/CD Pipeline
+      |
+      |-- Stage 1: Validate K8s manifests (kubectl dry-run)
+      |-- Stage 2: Secret scan (Gitleaks)
+      |-- Stage 3: SAST (Semgrep)
+      |-- Stage 4: IaC config scan (Trivy)
+      |-- Stage 5: Build + push image to GitLab Registry
+      |-- Stage 6: Generate SBOM (Syft)
+      |-- Stage 7: Image vulnerability scan (Trivy)
+      |-- Stage 8: GitOps deploy
+      |        |
+      |        |-- Update deployment.yaml in GitLab CE repo
+      |        |-- Update deployment.yaml in GitHub repo
+      |
+      ArgoCD detects GitHub change
+      |
+      Kyverno admission control
+      |-- disallow-latest-image-tag (Enforce)
+      |-- disallow-privileged-containers (Enforce)
+      |-- require-approved-registry (Enforce)
+      |
+      Kubernetes rolling update
+      |
+      Stage 9: Verify
+               |-- ArgoCD sync status check
+               |-- HTTP 200 smoke test
 ```
 
-## Integrate with your tools
+---
 
-* [Set up project integrations](http://10.10.1.101/kujal/demo-nginx/-/settings/integrations)
+## Pipeline Stages
 
-## Collaborate with your team
+| Stage | Tool | Purpose |
+|---|---|---|
+| validate | kubectl | Dry-run K8s manifest validation before deployment |
+| secret-scan | Gitleaks | Detect secrets, tokens, and credentials in source code |
+| sast | Semgrep | Static analysis for insecure code patterns |
+| config-scan | Trivy | Kubernetes manifest misconfiguration detection |
+| build-image | Docker | Build and push image to private GitLab Registry |
+| sbom | Syft | Generate Software Bill of Materials (CycloneDX) |
+| image-scan | Trivy | CVE scanning of built container image |
+| deploy | Git + ArgoCD | Update image tag in Git, ArgoCD reconciles cluster |
+| verify | kubectl + curl | Confirm ArgoCD sync, pod health, and HTTP 200 |
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+---
 
-## Test and Deploy
+## GitOps Deployment Flow
 
-Use the built-in continuous integration in GitLab.
+This pipeline uses a pull-based GitOps pattern. The CI pipeline does not run `kubectl apply` directly. Instead:
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+1. Pipeline builds and pushes image with commit SHA tag
+2. Pipeline updates `deployment.yaml` with new image tag via `sed`
+3. Updated manifest is committed and pushed to GitHub
+4. ArgoCD detects the change and syncs the cluster
+5. Kyverno validates the deployment at admission time
+6. Verify stage confirms sync status and application health
 
-***
+This approach separates CI (build, scan, test) from CD (deploy, reconcile), which is a more reliable and auditable pattern for production environments.
 
-# Editing this README
+---
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Security Controls
 
-## Suggestions for a good README
+| Control | Tool | Enforcement |
+|---|---|---|
+| Secret detection | Gitleaks | Pipeline gate — blocks on findings |
+| Static code analysis | Semgrep | Pipeline gate |
+| IaC misconfiguration | Trivy | Pipeline gate |
+| Container CVE scanning | Trivy | Pipeline gate — HIGH and CRITICAL |
+| SBOM generation | Syft | CycloneDX format, committed as artifact |
+| No latest image tag | Kyverno | Enforce — blocks deployment |
+| No privileged containers | Kyverno | Enforce — blocks deployment |
+| Approved registry only | Kyverno | Enforce — only GitLab Registry permitted |
+| Image tag pinning | CI variable | Commit SHA used as image tag |
+| Credential protection | GitLab CI variables | No secrets in code or YAML |
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+---
 
-## Name
-Choose a self-explaining name for your project.
+## Kubernetes Security Context
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+All workloads deployed through this pipeline use a hardened security context:
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```yaml
+securityContext:
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+```
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+Resource limits, readiness probes, and liveness probes are applied to all containers.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+---
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+## Kyverno Policy Enforcement Evidence
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+Attempting to deploy an image from an external registry or with a `:latest` tag is blocked at the admission controller:
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+```
+$ kubectl run test --image=nginx:latest -n demo
+Error from server: admission webhook "validate.kyverno.svc-fail" denied the request:
+resource Pod/demo/test was blocked due to the following policies
+disallow-latest-image-tag:
+  require-explicit-image-tag: 'validation failure: Images must use an explicit non-latest tag.'
+require-approved-registry:
+  only-gitlab-registry: 'validation error: Container images must come from approved
+    GitLab Registry 10.10.1.101:5050.'
+```
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+Full evidence: [evidence/kubernetes/kyverno-policy-enforcement.txt](evidence/kubernetes/kyverno-policy-enforcement.txt)
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+---
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+## Repository Structure
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+```
+gitlab-devsecops-pipeline/
+├── .gitlab-ci.yml                        # 9-stage pipeline definition
+├── Dockerfile                            # nginx-unprivileged hardened image
+├── k8s/
+│   ├── deployment.yaml                   # K8s deployment manifest
+│   ├── service.yaml                      # NodePort service
+│   ├── namespace.yaml                    # demo namespace
+│   └── networkpolicy.yaml               # Network policy
+├── evidence/
+│   └── kubernetes/
+│       ├── deployment-validation.txt     # kubectl output — pods, nodes, ArgoCD
+│       └── kyverno-policy-enforcement.txt # Policy block evidence
+├── runbooks/
+│   ├── deployment-runbook.md            # Standard deployment procedure
+│   ├── rollback-runbook.md              # Rollback steps
+│   ├── gitops-deployment-runbook.md     # ArgoCD GitOps runbook
+│   ├── alert-response-runbook.md        # Alert triage and response
+│   └── troubleshooting.md              # Common issues and fixes
+└── terraform/                           # Supporting IaC (WIP)
+```
 
-## License
-For open source projects, say how it is licensed.
+---
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
-# trigger rebuild Wed Jun  3 14:50:00 UTC 2026
-# verify smoke test Wed Jun  3 15:00:07 UTC 2026
-# final validation Thu Jun  4 04:45:17 UTC 2026
+## Infrastructure
+
+| Component | Address | Role |
+|---|---|---|
+| GitLab CE | 10.10.1.101 | Source control, CI/CD, container registry |
+| GitLab Runner | 10.10.1.21 | Pipeline execution (SOC network) |
+| k8master | 10.10.1.70 | Kubernetes control plane |
+| k8s-worker-1 | 10.10.2.71 | Worker node (Target network) |
+| k8s-worker-2 | 10.10.3.72 | Worker node (Attacker network) |
+| ArgoCD | in-cluster | GitOps controller — syncs from GitHub |
+| Kyverno | in-cluster | Admission controller — policy enforcement |
+
+The Kubernetes cluster intentionally spans multiple network security zones (SOC, Target, Attacker) to simulate real-world multi-zone cluster design.
+
+---
+
+## Deployment Validation
+
+After pipeline runs, deployment can be validated:
+
+```bash
+# Check pods and images
+kubectl get pods -n demo -o wide
+kubectl get pods -n demo -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[0].image}{"\n"}{end}'
+
+# Check ArgoCD sync
+kubectl get application demo-nginx -n argocd
+
+# Check rollout
+kubectl rollout status deployment/demo-nginx -n demo
+```
+
+Expected result:
+
+```
+NAME         SYNC STATUS   HEALTH STATUS
+demo-nginx   Synced        Healthy
+```
+
+---
+
+## Design Decisions and Tradeoffs
+
+**Why GitOps instead of direct kubectl apply?**
+Direct kubectl apply in CI creates drift risk — ArgoCD would revert changes not reflected in Git. GitOps ensures Git is the single source of truth and all changes are auditable.
+
+**Why two repo updates in deploy stage?**
+ArgoCD is configured to sync from `github.com/TengkuRizal/TengkuRizal` (public). The GitLab CE repo is the source of CI, but GitHub is the source of truth for ArgoCD. Both are updated to keep them in sync.
+
+**Why runner cannot reach worker nodes directly?**
+The GitLab Runner sits in the SOC network (10.10.1.0/24). Worker nodes are in the Target and Attacker networks. pfSense firewall segments these zones. The smoke test uses k8master (also in SOC network) as the NodePort access point.
+
+**Why nginx-unprivileged?**
+Standard nginx runs as root on port 80. `nginxinc/nginx-unprivileged` runs as UID 101 on port 8080, compatible with `runAsNonRoot: true` and Kyverno's privileged container policy.
+
+**Why Audit mode was changed to Enforce for require-approved-registry?**
+The policy was in Audit mode initially — a known gap. After confirming all system namespaces were excluded from the policy scope, it was changed to Enforce to close the supply chain gap.
+
+---
+
+## Operational Runbooks
+
+| Runbook | Purpose |
+|---|---|
+| [deployment-runbook.md](runbooks/deployment-runbook.md) | Standard deployment and validation |
+| [rollback-runbook.md](runbooks/rollback-runbook.md) | Rollback procedure using kubectl and ArgoCD |
+| [gitops-deployment-runbook.md](runbooks/gitops-deployment-runbook.md) | ArgoCD sync troubleshooting |
+| [alert-response-runbook.md](runbooks/alert-response-runbook.md) | Alert triage and incident response |
+| [troubleshooting.md](runbooks/troubleshooting.md) | Common pipeline and cluster issues |
+
+---
+
+## Future Improvements
+
+- Add Cosign image signing for supply chain integrity
+- Add Falco runtime security monitoring
+- Add manual approval gate before deploy stage
+- Add Slack notification for pipeline success and failure
+- Add separate environments for staging and production
+- Add automated rollback on failed smoke test
+- Add SLO definition and error budget alerting
+- Enforce Kyverno policy for initContainers and ephemeralContainers
+
+---
+
+## Interview Talking Points
+
+**On the pipeline design:**
+This pipeline implements shift-left security — every security check runs before deployment, not after. Gitleaks catches secrets before they reach the registry. Trivy catches CVEs before the image is deployed. Kyverno catches policy violations before pods are scheduled.
+
+**On the GitOps pattern:**
+The pipeline does not run kubectl apply directly. It updates the deployment manifest in Git and lets ArgoCD reconcile the cluster state. This means every deployment is auditable, reversible, and consistent with what is in Git.
+
+**On Kyverno enforcement:**
+The require-approved-registry policy was initially in Audit mode — a gap I identified and addressed after confirming system namespace exclusions were in place. It is now in Enforce mode, meaning any image not from the internal GitLab registry is blocked at admission time, regardless of how the deployment is triggered.
+
+**On tradeoffs:**
+The smoke test uses k8master as the NodePort access point because the GitLab Runner cannot reach worker nodes directly due to network segmentation. In production, I would use an Ingress controller with a load balancer instead of NodePort, which would make the service accessible from a stable address regardless of which node is running the pod.
+
+---
+
+## Author
+
+**Tengku Rizal** — DevSecOps Engineer
+Building: GitLab CI/CD · Kubernetes · ArgoCD · Kyverno · Wazuh SIEM · Terraform
+Location: Kuala Lumpur, Malaysia
